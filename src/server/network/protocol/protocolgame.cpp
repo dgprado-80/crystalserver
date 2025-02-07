@@ -27,6 +27,7 @@
 #include "creatures/monsters/monster.hpp"
 #include "creatures/monsters/monsters.hpp"
 #include "creatures/npcs/npc.hpp"
+#include "creatures/players/animus_mastery/animus_mastery.hpp"
 #include "creatures/players/achievement/player_achievement.hpp"
 #include "creatures/players/cyclopedia/player_badge.hpp"
 #include "creatures/players/cyclopedia/player_cyclopedia.hpp"
@@ -63,6 +64,7 @@
 #include "enums/account_type.hpp"
 #include "enums/object_category.hpp"
 #include "enums/player_blessings.hpp"
+#include "enums/player_cyclopedia.hpp"
 
 /*
  * NOTE: This namespace is used so that we can add functions without having to declare them in the ".hpp/.hpp" file
@@ -1238,6 +1240,9 @@ void ProtocolGame::parsePacketFromDispatcher(NetworkMessage &msg, uint8_t recvby
 		case 0xAC:
 			parseChannelExclude(msg);
 			break;
+		case 0xAD:
+			parseCyclopediaHouseAuction(msg);
+			break;
 		case 0xAE:
 			parseSendBosstiary();
 			break;
@@ -1395,8 +1400,12 @@ void ProtocolGame::parseHotkeyEquip(NetworkMessage &msg) {
 	}
 
 	auto itemId = msg.get<uint16_t>();
-	auto tier = msg.get<uint8_t>();
-	g_game().playerEquipItem(player->getID(), itemId, Item::items[itemId].upgradeClassification > 0, tier);
+	uint8_t tier = 0;
+	bool hasTier = Item::items[itemId].upgradeClassification > 0;
+	if (hasTier) {
+		tier = msg.get<uint8_t>();
+	}
+	g_game().playerEquipItem(player->getID(), itemId, hasTier, tier);
 }
 
 void ProtocolGame::GetTileDescription(const std::shared_ptr<Tile> &tile, NetworkMessage &msg) {
@@ -2392,8 +2401,13 @@ void ProtocolGame::parseBestiarysendMonsterData(NetworkMessage &msg) {
 
 	newmsg.addByte(currentLevel);
 
-	newmsg.add<uint16_t>(0); // Animus Mastery Bonus
-	newmsg.add<uint16_t>(0); // Animus Mastery Points
+	if (player->animusMastery().has(mtype->name)) {
+		newmsg.add<uint16_t>(static_cast<uint16_t>(std::round((player->animusMastery().getExperienceMultiplier() - 1) * 1000))); // Animus Mastery Bonus
+		newmsg.add<uint16_t>(player->animusMastery().getPoints()); // Animus Mastery Points
+	} else {
+		newmsg.add<uint16_t>(0);
+		newmsg.add<uint16_t>(0);
+	}
 
 	newmsg.add<uint32_t>(killCounter);
 
@@ -3028,10 +3042,15 @@ void ProtocolGame::parseBestiarysendCreatures(NetworkMessage &msg) {
 			newmsg.addByte(0);
 		}
 
-		newmsg.add<uint16_t>(0); // Creature Animous Bonus
+		const auto monsterType = g_monsters().getMonsterType(it_.second);
+		if (monsterType && player->animusMastery().has(it_.second)) {
+			newmsg.add<uint16_t>(static_cast<uint16_t>(std::round((player->animusMastery().getExperienceMultiplier() - 1) * 1000))); // Animus Mastery Bonus
+		} else {
+			newmsg.add<uint16_t>(0);
+		}
 	}
 
-	newmsg.add<uint16_t>(0); // Animus Mastery Points
+	newmsg.add<uint16_t>(player->animusMastery().getPoints()); // Animus Mastery Points
 
 	writeToOutputBuffer(newmsg);
 }
@@ -3136,7 +3155,10 @@ void ProtocolGame::parseMarketBrowse(NetworkMessage &msg) {
 		g_game().playerBrowseMarketOwnHistory(player->getID());
 	} else if (!oldProtocol) {
 		auto itemId = msg.get<uint16_t>();
-		auto tier = msg.get<uint8_t>();
+		uint8_t tier = 0;
+		if (Item::items[itemId].upgradeClassification > 0) {
+			tier = msg.get<uint8_t>();
+		}
 		player->sendMarketEnter(player->getLastDepotId());
 		g_game().playerBrowseMarket(player->getID(), itemId, tier);
 	} else {
@@ -3211,7 +3233,7 @@ void ProtocolGame::parseBrowseField(NetworkMessage &msg) {
 void ProtocolGame::parseSeekInContainer(NetworkMessage &msg) {
 	uint8_t containerId = msg.getByte();
 	auto index = msg.get<uint16_t>();
-	auto primaryType = msg.getByte();
+	auto primaryType = !oldProtocol ? msg.getByte() : 0;
 	g_game().playerSeekInContainer(player->getID(), containerId, index, primaryType);
 }
 
@@ -3502,7 +3524,7 @@ void ProtocolGame::sendCyclopediaCharacterGeneralStats() {
 	msg.add<uint32_t>(std::min<int32_t>(player->getMaxHealth(), std::numeric_limits<uint16_t>::max()));
 	msg.add<uint32_t>(std::min<int32_t>(player->getMana(), std::numeric_limits<uint16_t>::max()));
 	msg.add<uint32_t>(std::min<int32_t>(player->getMaxMana(), std::numeric_limits<uint16_t>::max()));
-	msg.addByte(player->getSoul());
+	msg.addByte(player->getFullSoul());
 	msg.add<uint16_t>(player->getStaminaMinutes());
 
 	std::shared_ptr<Condition> condition = player->getCondition(CONDITION_REGENERATION, CONDITIONID_DEFAULT);
@@ -6924,6 +6946,7 @@ void ProtocolGame::sendAddCreature(const std::shared_ptr<Creature> &creature, co
 
 	sendLootContainers();
 	sendBasicData();
+	sendHousesInfo();
 	// Wheel of destiny cooldown
 	if (!oldProtocol && g_configManager().getBoolean(TOGGLE_WHEELSYSTEM)) {
 		player->wheel()->sendGiftOfLifeCooldown();
@@ -7193,6 +7216,7 @@ void ProtocolGame::sendOutfitWindow() {
 			msg.addString(mount->name);
 		}
 
+		player->hasRequestedOutfit(true);
 		writeToOutputBuffer(msg);
 		return;
 	}
@@ -7240,7 +7264,7 @@ void ProtocolGame::sendOutfitWindow() {
 			msg.addByte(0x00);
 			++outfitSize;
 		} else if (outfit->lookType == 1210 || outfit->lookType == 1211) { // golden outfit
-			if (player->canWear(1210, 0) || player->canWear(1211, 0)) {
+			if (player->canWearOutfit(1210, 0) || player->canWearOutfit(1211, 0)) {
 				msg.add<uint16_t>(outfit->lookType);
 				msg.addString(outfit->name);
 				msg.addByte(3);
@@ -7248,7 +7272,7 @@ void ProtocolGame::sendOutfitWindow() {
 				++outfitSize;
 			}
 		} else if (outfit->lookType == 1456 || outfit->lookType == 1457) { // Royal Costume
-			if (player->canWear(1456, 0) || player->canWear(1457, 0)) {
+			if (player->canWearOutfit(1456, 0) || player->canWearOutfit(1457, 0)) {
 				msg.add<uint16_t>(outfit->lookType);
 				msg.addString(outfit->name);
 				msg.addByte(3);
@@ -7335,6 +7359,7 @@ void ProtocolGame::sendOutfitWindow() {
 	// Version 12.81 - Random mount 'bool'
 	msg.addByte(isSupportOutfit ? 0x00 : (player->isRandomMounted() ? 0x01 : 0x00));
 
+	player->hasRequestedOutfit(true);
 	writeToOutputBuffer(msg);
 }
 
@@ -7775,8 +7800,8 @@ void ProtocolGame::AddCreature(NetworkMessage &msg, const std::shared_ptr<Creatu
 	}
 
 	LightInfo lightInfo = creature->getCreatureLight();
-	msg.addByte(player->isAccessPlayer() ? 0xFF : lightInfo.level);
-	msg.addByte(lightInfo.color);
+	msg.addByte((player->hasFlag(PlayerFlags_t::HasFullLight) ? 0xFF : lightInfo.level));
+	msg.addByte((player->hasFlag(PlayerFlags_t::HasFullLight) ? 215 : lightInfo.color));
 
 	msg.add<uint16_t>(creature->getStepSpeed());
 
@@ -7878,7 +7903,7 @@ void ProtocolGame::AddPlayerStats(NetworkMessage &msg) {
 		msg.addByte(std::min<uint8_t>(static_cast<uint8_t>(player->getMagicLevelPercent()), 100));
 	}
 
-	msg.addByte(player->getSoul());
+	msg.addByte(player->getFullSoul());
 
 	msg.add<uint16_t>(player->getStaminaMinutes());
 
@@ -8074,8 +8099,8 @@ void ProtocolGame::closeImbuementWindow() {
 
 void ProtocolGame::AddWorldLight(NetworkMessage &msg, LightInfo lightInfo) {
 	msg.addByte(0x82);
-	msg.addByte((player->isAccessPlayer() ? 0xFF : lightInfo.level));
-	msg.addByte(lightInfo.color);
+	msg.addByte((player->hasFlag(PlayerFlags_t::HasFullLight) ? 0xFF : lightInfo.level));
+	msg.addByte((player->hasFlag(PlayerFlags_t::HasFullLight) ? 215 : lightInfo.color));
 }
 
 void ProtocolGame::sendSpecialContainersAvailable() {
@@ -8135,8 +8160,8 @@ void ProtocolGame::AddCreatureLight(NetworkMessage &msg, const std::shared_ptr<C
 
 	msg.addByte(0x8D);
 	msg.add<uint32_t>(creature->getID());
-	msg.addByte((player->isAccessPlayer() ? 0xFF : lightInfo.level));
-	msg.addByte(lightInfo.color);
+	msg.addByte((player->hasFlag(PlayerFlags_t::HasFullLight) ? 0xFF : lightInfo.level));
+	msg.addByte((player->hasFlag(PlayerFlags_t::HasFullLight) ? 215 : lightInfo.color));
 }
 
 // tile
@@ -9360,5 +9385,194 @@ void ProtocolGame::sendTakeScreenshot(Screenshot_t screenshotType) {
 	NetworkMessage msg;
 	msg.addByte(0x75);
 	msg.addByte(screenshotType);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::parseCyclopediaHouseAuction(NetworkMessage &msg) {
+	if (oldProtocol) {
+		return;
+	}
+
+	uint8_t houseActionType = msg.getByte();
+	switch (houseActionType) {
+		case 0: {
+			const auto townName = msg.getString();
+			g_game().playerCyclopediaHousesByTown(player->getID(), townName);
+			break;
+		}
+		case 1: {
+			const uint32_t houseId = msg.get<uint32_t>();
+			const uint64_t bidValue = msg.get<uint64_t>();
+			g_game().playerCyclopediaHouseBid(player->getID(), houseId, bidValue);
+			break;
+		}
+		case 2: {
+			const uint32_t houseId = msg.get<uint32_t>();
+			const uint32_t timestamp = msg.get<uint32_t>();
+			g_game().playerCyclopediaHouseMoveOut(player->getID(), houseId, timestamp);
+			break;
+		}
+		case 3: {
+			const uint32_t houseId = msg.get<uint32_t>();
+			const uint32_t timestamp = msg.get<uint32_t>();
+			const std::string &newOwner = msg.getString();
+			const uint64_t bidValue = msg.get<uint64_t>();
+			g_game().playerCyclopediaHouseTransfer(player->getID(), houseId, timestamp, newOwner, bidValue);
+			break;
+		}
+		case 4: {
+			const uint32_t houseId = msg.get<uint32_t>();
+			g_game().playerCyclopediaHouseCancelMoveOut(player->getID(), houseId);
+			break;
+		}
+		case 5: {
+			const uint32_t houseId = msg.get<uint32_t>();
+			g_game().playerCyclopediaHouseCancelTransfer(player->getID(), houseId);
+			break;
+		}
+		case 6: {
+			const uint32_t houseId = msg.get<uint32_t>();
+			g_game().playerCyclopediaHouseAcceptTransfer(player->getID(), houseId);
+			break;
+		}
+		case 7: {
+			const uint32_t houseId = msg.get<uint32_t>();
+			g_game().playerCyclopediaHouseRejectTransfer(player->getID(), houseId);
+			break;
+		}
+	}
+}
+
+void ProtocolGame::sendCyclopediaHouseList(HouseMap houses) {
+	NetworkMessage msg;
+	msg.addByte(0xC7);
+	msg.add<uint16_t>(houses.size());
+	for (const auto &[clientId, houseData] : houses) {
+		msg.add<uint32_t>(clientId);
+		msg.addByte(0x01); // 0x00 = Renovation; 0x01 = Available
+
+		auto houseState = houseData->getState();
+		auto stateValue = magic_enum::enum_integer(houseState);
+		msg.addByte(stateValue);
+		if (houseState == CyclopediaHouseState::Available) {
+			bool bidder = houseData->getBidderName() == player->getName();
+			msg.addString(houseData->getBidderName());
+			msg.addByte(bidder);
+			uint8_t disableIndex = enumToValue(player->canBidHouse(clientId));
+			msg.addByte(disableIndex);
+
+			if (!houseData->getBidderName().empty()) {
+				msg.add<uint32_t>(houseData->getBidEndDate());
+				msg.add<uint64_t>(houseData->getHighestBid());
+				if (bidder) {
+					msg.add<uint64_t>(houseData->getBidHolderLimit());
+				}
+			}
+		} else if (houseState == CyclopediaHouseState::Rented) {
+			auto ownerName = IOLoginData::getNameByGuid(houseData->getOwner());
+			msg.addString(ownerName);
+			msg.add<uint32_t>(houseData->getPaidUntil());
+
+			bool rented = ownerName.compare(player->getName()) == 0;
+			msg.addByte(rented);
+			if (rented) {
+				msg.addByte(0);
+				msg.addByte(0);
+			}
+		} else if (houseState == CyclopediaHouseState::Transfer) {
+			auto ownerName = IOLoginData::getNameByGuid(houseData->getOwner());
+			msg.addString(ownerName);
+			msg.add<uint32_t>(houseData->getPaidUntil());
+
+			bool isOwner = ownerName.compare(player->getName()) == 0;
+			msg.addByte(isOwner);
+			if (isOwner) {
+				msg.addByte(0); // ?
+				msg.addByte(0); // ?
+			}
+			msg.add<uint32_t>(houseData->getBidEndDate());
+			msg.addString(houseData->getBidderName());
+			msg.addByte(0); // ?
+			msg.add<uint64_t>(houseData->getInternalBid());
+
+			bool isNewOwner = player->getName() == houseData->getBidderName();
+			msg.addByte(isNewOwner);
+			if (isNewOwner) {
+				uint8_t disableIndex = enumToValue(player->canAcceptTransferHouse(clientId));
+				msg.addByte(disableIndex); // Accept Transfer Error
+				msg.addByte(0); // Reject Transfer Error
+			}
+
+			if (isOwner) {
+				msg.addByte(0); // Cancel Transfer Error
+			}
+		} else if (houseState == CyclopediaHouseState::MoveOut) {
+			auto ownerName = IOLoginData::getNameByGuid(houseData->getOwner());
+			msg.addString(ownerName);
+			msg.add<uint32_t>(houseData->getPaidUntil());
+
+			bool isOwner = ownerName.compare(player->getName()) == 0;
+			msg.addByte(isOwner);
+			if (isOwner) {
+				msg.addByte(0); // ?
+				msg.addByte(0); // ?
+				msg.add<uint32_t>(houseData->getBidEndDate());
+				msg.addByte(0);
+			} else {
+				msg.add<uint32_t>(houseData->getBidEndDate());
+			}
+		}
+	}
+
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendHouseAuctionMessage(uint32_t houseId, HouseAuctionType type, uint8_t index, bool bidSuccess /* = false*/) {
+	NetworkMessage msg;
+	const auto typeValue = enumToValue(type);
+
+	msg.addByte(0xC3);
+	msg.add<uint32_t>(houseId);
+	msg.addByte(typeValue);
+	if (bidSuccess && typeValue == 1) {
+		msg.addByte(0x00);
+	}
+	msg.addByte(index);
+
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendHousesInfo() {
+	NetworkMessage msg;
+
+	uint32_t houseClientId = 0;
+	const auto accountHouseCount = g_game().map.houses.getHouseCountByAccount(player->getAccountId());
+	const auto house = g_game().map.houses.getHouseByPlayerId(player->getGUID());
+	if (house) {
+		houseClientId = house->getClientId();
+	}
+
+	msg.addByte(0xC6);
+	msg.add<uint32_t>(houseClientId);
+	msg.addByte(0x00);
+
+	msg.addByte(accountHouseCount); // Houses Account
+
+	msg.addByte(0x00);
+
+	msg.addByte(3);
+	msg.addByte(3);
+
+	msg.addByte(0x01);
+
+	msg.addByte(0x01);
+	msg.add<uint32_t>(houseClientId);
+
+	const auto &housesList = g_game().map.houses.getHouses();
+	msg.add<uint16_t>(housesList.size());
+	for (const auto &it : housesList) {
+		msg.add<uint32_t>(it.second->getClientId());
+	}
+
 	writeToOutputBuffer(msg);
 }

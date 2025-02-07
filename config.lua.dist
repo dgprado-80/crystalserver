@@ -2,6 +2,7 @@
 
 -- Core settings
 -- If you want to use the global datapack folder, put "data-global"
+-- if you want use Crystal Server map, put "data-crystal"
 dataPackDirectory = "data-global"
 -- Don't change this unless you know what you're doing
 coreDirectory = "data"
@@ -20,9 +21,6 @@ toggleMaintainMode = false
 -- Should inform the expected downtime or resumption details succinctly.
 -- @field [parent=#global] #string maintainModeMessage an empty string by default, set a custom message if needed.
 maintainModeMessage = ""
-
--- toggleTestMode get player infinite health mana and soul.
-toggleTestMode = false
 
 -- Rook system
 -- NOTE: Town ids: Dawnport = 2, Rookgaard = 3
@@ -109,6 +107,17 @@ depotBoxes = 20
 maxItem = 5000
 maxContainer = 500
 maxContainerDepth = 200
+
+-- Animus Mastery - SoulPit
+-- NOTE: animusMasteryMaxMonsterXpMultiplier is the maximum experience the multiplier can be.
+-- NOTE: animusMasteryMonsterXpMultiplier is the monster experience multiplier that has the animus mastery unlocked.
+-- NOTE: animusMasteryMonstersXpMultiplier is the multiplier for each 'animusMasteryMonstersToIncreaseXpMultiplier' monsters that
+-- the player has the animus mastery unlocked.
+-- NOTE: animusMasteryMonstersToIncreaseXpMultiplier is the amount of monster to increase the experience multiplier by 'animusMasteryMonstersXpMultiplier'.
+animusMasteryMaxMonsterXpMultiplier = 4.0
+animusMasteryMonsterXpMultiplier = 2.0
+animusMasteryMonstersXpMultiplier = 0.1
+animusMasteryMonstersToIncreaseXpMultiplier = 10
 
 -- Augments System
 -- NOTE: the following values are for all weapons and equipments that have type of "increase damage", "powerful impact" and "strong impact".
@@ -367,11 +376,14 @@ fairFightTimeRange = 5 * 60 * 1000
 Setting this to false may pose risks; if a house is abandoned and contains a large number of items on the floor, those items will be transferred to the player's depot instantly.
 • This could potentially freeze the server due to the heavy operation. It's advised to keep this setting enabled (true) to minimize risks.
 ]]
+-- NOTE: When toggleCyclopediaHouseAuction = true, the !buyhouse commmand does not work.
 -- Periods: daily/weekly/monthly/yearly/never
 -- Base: sqm,rent,sqm+rent
+toggleCyclopediaHouseAuction = false
+daysToCloseBid = 7
 housePriceRentMultiplier = 0.0
 housePriceEachSQM = 1000
-houseRentPeriod = "never"
+houseRentPeriod = "monthly"
 houseRentRate = 1.0
 houseOwnedByAccount = false
 houseBuyLevel = 100

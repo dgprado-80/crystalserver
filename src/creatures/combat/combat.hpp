@@ -163,7 +163,7 @@ public:
 	// non-assignable
 	AreaCombat &operator=(const AreaCombat &) = delete;
 
-	void getList(const Position &centerPos, const Position &targetPos, std::vector<std::shared_ptr<Tile>> &list) const;
+	void getList(const Position &centerPos, const Position &targetPos, std::vector<std::shared_ptr<Tile>> &list, const Direction dir) const;
 
 	void setupArea(const std::list<uint32_t> &list, uint32_t rows);
 	void setupArea(int32_t length, int32_t spread);
@@ -284,6 +284,7 @@ private:
 	 * @return true if the fear condition can be applied, false otherwise.
 	 */
 	static bool checkFearConditionAffected(const std::shared_ptr<Player> &player);
+	static bool checkRootConditionAffected(const std::shared_ptr<Player> &player);
 	static void CombatConditionFunc(const std::shared_ptr<Creature> &caster, const std::shared_ptr<Creature> &target, const CombatParams &params, CombatDamage* data);
 	static void CombatDispelFunc(const std::shared_ptr<Creature> &caster, const std::shared_ptr<Creature> &target, const CombatParams &params, CombatDamage* data);
 	static void CombatNullFunc(const std::shared_ptr<Creature> &caster, const std::shared_ptr<Creature> &target, const CombatParams &params, CombatDamage* data);

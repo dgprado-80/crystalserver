@@ -1,19 +1,85 @@
 # Changelog for Crystal Server
 
 
+## Version 4.1.3
+
+### Features
+
+- Added new attributes to outfits. Check `outfits.xml` for examples. ([Tryller](https://github.com/jprzimba))
+- Added new attributies to /attr: `text`, `writer`, `duration`, `weight`, `imbuementslot`, `tier`, `hitchance`, `shootrange`, `special` and `quicklootcontainer`. ([Tryller](https://github.com/jprzimba))
+- Added new flags: `CanMoveFromFar`, `HasFullLight`, `AllowIdle`, `CanWearAllMounts`, and `NotGainUnjustified`. ([Tryller](https://github.com/jprzimba))
+- Added Vibrancy imbuement. ([pennaor](https://github.com/pennaor))
+- Added Soul Pit arena/animus mastery/soul core. ([FelipePaluco](https://github.com/FelipePaluco))
+- Added a new command `/mute`, which will mute a player until unmuted by `/unmute`. ([Tryller](https://github.com/jprzimba))
+- Cyclopedia House Auction system. ([murilo09](https://github.com/murilo09))
+- Updated name change functionality to save old player names in a database table called `player_oldnames`. ([Tryller](https://github.com/jprzimba))
+
+## Added files
+
+- data/migrations/49.lua
+- data/migrations/50.lua
+- data/migrations/51.lua
+- data-global/lib/others/soulpit.lua
+- data-global/startup/tables/tile.lua
+- data-global/npc/myzzi.lua
+- data-global/npc/shirtalis_of_the_summer_court.lua
+- data-global/npc/farhilorn_of_the_winter_court.lua
+- data-global/scripts/actions/soulpit/soulpit_arena_exit.lua
+- data-global/scripts/actions/soulpit/soulpit_entrance.lua
+- data-global/scripts/quests/soulpit/exalted_core.lua
+- data-global/scripts/quests/soulpit/ondroploot_soul_core.lua
+- data-global/scripts/quests/soulpit/soul_prism.lua
+- data-global/scripts/quests/soulpit/soulpit_creatureevents.lua
+- data-global/scripts/quests/soulpit/soulpit_fight.lua
+- data-global/scripts/quests/soulpit/soulpit_intensehex.lua
+- data-global/scripts/quests/soulpit/soulpit_opressor.lua
+- data-global/scripts/quests/soulpit/soulpit_powerless.lua
+
+## Modified files
+
+- config.lua
+- schema.sql
+- data/items/items.xm
+- data/libs/functions/lever.lua
+- data/modules/scripts/gamestore/init.lua
+- data/scripts/talkactions/god/attributes.lua
+- data/scripts/lib/register_spells.lua
+- data/XML/groups.xml
+- data/XML/outfits.xml
+- data-global/lib/others/load.lua
+- data-global/scripts/quests/ferumbras_ascension/actions_lever_first.lua
+- data-global/scripts/quests/ferumbras_ascension/actions_lever_four.lua
+- data-global/scripts/quests/ferumbras_ascension/actions_lever_second.lua
+- data-global/scripts/quests/ferumbras_ascension/actions_lever_third.lua
+- data-global/scripts/quests/ferumbras_ascension/actions_the_shatterer_levers.lua
+- data-global/scripts/quests/ferumbras_ascension/creaturescripts_bosses_kill.lua
+- data-global/scripts/quests/ferumbras_ascension/creaturescripts_death_dragon.lua
+- data-global/scripts/quests/ferumbras_ascension/creaturescripts_the_shatterer_kill.lua
+- data-global/scripts/quests/ferumbras_ascension/creaturescripts_zamulosh_clone.lua
+- data-global/world/world-house.xml
+- data-global/world/world-monster.xml
+- data-global/world/world-npc.xml
+- data-global/world/world.otbm (world.7z)
+
+### Bug Fixes
+
+- Fixed Stealth Ring being destroyed in certain cases, based on [Stealth Ring](https://tibia.fandom.com/wiki/Stealth_Ring). ([Tryller](https://github.com/jprzimba))
+- Fixed an issue where store items could not be moved to the store inbox after being unwrapped. ([TheGlitchLab](https://github.com/TheGlitchLab))
+- Fixed some features not being disabled when deactivated in `config.lua`: `!chain`, `!emote`, and `!spellwords`. ([Tryller](https://github.com/jprzimba))
+
+
 ## Version 4.1.2
 
 ### Features
 
 - Protocol 14.05 support. ([Tryller](https://github.com/jprzimba))
 - New protocol 14.05 assets. ([Tryller](https://github.com/jprzimba))
-- Optimized the `onPlayerSellAllLoot` code to prevent prolonged freezes. ([Tryller](https://github.com/jprzimba))
 - Add new configurable featurees in `config.lua`:  `chainSystemVipOnly`, `fieldOwnershipDuration`, `bedsOnlyPremium`, `loginProtectionPeriod`, `chainSystemModifyMagic`, `logPlayersStatements`. ([Tryller](https://github.com/jprzimba))
 - Added a new commands for players: `!randomoutfit`, `!spellwords`. ([Tryller](https://github.com/jprzimba))
 - Moved emote spells to `kv` instead of `storage`. ([Tryller](https://github.com/jprzimba))
 - Updated npcs and spells from 13.40 updates. ([murilo09](https://github.com/murilo09))
 - Added a Rook system with configurations in `config.lua`. ([Tryller](https://github.com/jprzimba))
-- Added a Test Mode with configurations in `config.lua`. ([Tryller](https://github.com/jprzimba))
+- Added a new group `game tester` with flag `isgametester` in `groups.xml` and a new player flag `PlayerFlag_IsGameTester`. ([Tryller](https://github.com/jprzimba))
 
 ## Added files
 
@@ -29,6 +95,7 @@
 - config.lua
 - data/items/assets.dat
 - data/items/items.xml
+- data/libs/functions/boss_lever.lua
 - data/libs/systems/features.lua
 - data/scripts/creaturescripts/player/login.lua
 - data/scripts/movements/special_tiles.lua
@@ -39,12 +106,14 @@
 - data/scripts/talkactions/god/create_item.lua
 - data/scripts/talkactions/god/create_summon.lua
 - data/scripts/talkactions/god/create_npc.lua
+- data/scripts/talkactions/god/flags.lua
 - data/scripts/talkactions/player/chain_system.lua
 - data/scripts/talkactions/player/emote_spell.lua
 - data/scripts/spells/attack/annihilation.lua
 - data/scripts/spells/attack/ultimate_ice_strike.lua
 - data/scripts/spells/attack/ultimate_terra_strike.lua
 - data/XML/imbuements.xml
+- data/XML/groups.xml
 - data-global/npc (all npc files)
 - data-global/npc/the_oracle.lua (modified to rook system)
 - data-global/world/world.otbm (7z file)
@@ -113,7 +182,6 @@
 - Players can enable the chain system using the `!chain` command. ([Tryller](https://github.com/jprzimba)).
 - Updated npc data-global/npc/hireling.lua, now it sell imbuement packages and also buy all loots inside Loot Pouch ([Tryller](https://github.com/jprzimba)).
 - Cyclopedia item summary ([phacUFPE](https://github.com/phacUFPE))
-- Add Vibrancy imbuement ([pennaor](https://github.com/pennaor))
 - Badge system ([elsongabriel](https://github.com/elsongabriel))
 - Screenshots configurable in config.lua enableScreenshots ([Tryller](https://github.com/jprzimba)).
 - Augments system ([phacUFPE](https://github.com/phacUFPE)).
@@ -131,7 +199,6 @@
 - Fixed V.I.P List ([Tryller](https://github.com/jprzimba)).
 - Fixed damage reflection not working properly ([Tryller](https://github.com/jprzimba)).
 - Fixed imbuement system when the player adds imbuement or cancels imbuement and the imbuement window is open not updating ([Tryller](https://github.com/jprzimba)).
-- Optimized onPlayerSellAllLoot in npc code to avoid long freeze ([Tryller](https://github.com/jprzimba)).
 - Fixed data/scripts/talkactions/player/refill.lua, now check if player has capacity to receive items. ([Tryller](https://github.com/jprzimba)).
 - Fixed Loot pouch using in the Obtain method ([carlospess0a](https://github.com/carlospess0a)).
 - Fixed destroy field is working inside pz ([carlospess0a](https://github.com/carlospess0a)).
